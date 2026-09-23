@@ -15,6 +15,10 @@
 #define SENSE_FROST_CX10 20
 #endif
 
+#ifndef PIN_DS18_OUT
+#define PIN_DS18_OUT 4
+#endif
+
 struct __attribute__((packed)) SensePkt {
   uint8_t  magic;
   uint8_t  ver;
