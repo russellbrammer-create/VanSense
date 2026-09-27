@@ -7,6 +7,7 @@
 #include <BLEServer.h>
 #include <BLEAdvertising.h>
 #include "sense_pkt.h"
+#include "baro.h"
 
 static SensePkt pkt;
 static BLEAdvertising *adv = nullptr;
@@ -72,8 +73,13 @@ static void dummy_tick() {
   }
   pkt.vbat_x100 = (uint16_t)lroundf((12.55f + 0.12f * sinf(t / 9.0f)) * 100.0f);
   pkt.kpa_x10 = 0;
-  pkt.alt_m = 0;
-  pkt.hpa_x10 = 0;
+  if (baro_ok()) {
+    pkt.hpa_x10 = (uint16_t)lroundf(baro_hpa() * 10.0f);
+    pkt.alt_m = (int16_t)lroundf(baro_alt_m());
+  } else {
+    pkt.alt_m = 0;
+    pkt.hpa_x10 = 0;
+  }
   if (now - tDummy >= 80) {
     tDummy = now;
     dummyRpm += (float)random(-40, 45);
@@ -158,6 +164,7 @@ void setup() {
   ledcWrite(PIN_RPM_SIM, 128);
 
   dummy_tick();
+  baro_begin();
 
   BLEDevice::init("VanSense");
   BLEDevice::setPower(ESP_PWR_LVL_P9);
@@ -170,20 +177,22 @@ void setup() {
   apply_advert();
   adv->start();
 
-  Serial.println("VanSense v3 + DS18 out/cool + RPM sim GPIO10");
+  Serial.println("VanSense v3 + DS18 + BMP180 + RPM sim");
 }
 
 void loop() {
   dummy_tick();
   ds18_tick();
   rpm_tick();
+  baro_tick();
   if (millis() - tAdvert >= 1000) {
     tAdvert = millis();
     apply_advert();
-    Serial.printf("out %s %.1f  cool %s %.1f  rpm %s %u\n",
+    Serial.printf("out %s %.1f  cool %s %.1f  rpm %s %u  hPa %s %.1f dP=%.2f\n",
                   outLive ? "LIVE" : "dummy", pkt.t_out_x10 / 10.0f,
                   coolLive ? "LIVE" : "dummy", pkt.t_cool_x10 / 10.0f,
-                  rpmLive ? "OPTO" : "dummy", pkt.rpm);
+                  rpmLive ? "OPTO" : "dummy", pkt.rpm,
+                  baro_ok() ? "LIVE" : "none", baro_hpa(), baro_delta_hpa());
   }
   delay(20);
 }
